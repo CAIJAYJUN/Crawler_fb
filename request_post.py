@@ -39,13 +39,18 @@ def setDriver(email,password,fb_main_url=None):
     options.add_argument("--disable-notifications")
     user_agent = header.generate()['User-Agent']
     options.add_argument('--user-agent=%s' % user_agent)
+    # service = Service(executable_path='chromedriver.exe')
     driver = webdriver.Chrome(options=options)
-    if fb_main_url != None:
-        driver.get(fb_main_url)
-        login(driver,email,password, wait_seconds = 10)
+    if fb_main_url is None:
+        time.sleep(random.uniform(2,5))
+        return driver
+    
+    driver.get(fb_main_url)
+    login(driver,email,password, wait_seconds = 20)
+    time.sleep(random.uniform(2,5))
     return driver
     
-def login(driver,email,password,wait_seconds = 2):
+def login(driver,email,password,wait_seconds = 10):
     """_summary_
 
     Args:
@@ -62,18 +67,33 @@ def login(driver,email,password,wait_seconds = 2):
             EC.presence_of_element_located(("name","email")),
             "Not found"
         )
-        # print('find!!')
-    except:
-        pass
-    
+        WebDriverWait(driver, wait_seconds).until(
+            EC.presence_of_element_located(("name","pass")),
+            "Not found"
+        )
+        WebDriverWait(driver, wait_seconds).until(
+            EC.presence_of_element_located(("name","login")),
+            "Not found"
+        )
+        print('find!!')
+    except Exception as e:
+        print(f"not find submit account:{e}")
+        raise e
+    time.sleep(1)
     try:
         email_elem = driver.find_element("name","email")
         password_elem = driver.find_element("name","pass")
+        sum_elem = driver.find_element("name","login")
         email_elem.send_keys(email)
         password_elem.send_keys(password)
+        time.sleep(random.uniform(2,4))
         password_elem.submit()
-    except:
-        pass 
+        # sum_elem.click()
+    except Exception as e:
+        print(f"fail to login:{e}")
+        # login(driver,email,password,wait_seconds)
+        logging.error(f"fail to login:{e}")
+        raise e 
     
     return driver
 
@@ -90,8 +110,13 @@ def clickNext(main_driver,email,password):
         _type_: _description_
     """
     # login(main_driver,email,password)
-    time.sleep(3.5)
+    time.sleep(5)
     # //*[@id="m_group_stories_container"]/div/a
+    
+    if len(main_driver.find_elements("name","login")):
+        print("need to login!")    
+        main_driver = login(main_driver,email,password, wait_seconds=20)
+        
     try:
         main_driver.find_element(By.XPATH,'//*[@id="m_group_stories_container"]/div/a').click()
     except Exception as e:
@@ -103,8 +128,8 @@ def clickNext(main_driver,email,password):
 
 def getLink(main_driver,email,password):
     links = []
-    main_driver = login(main_driver,email,password)
-    time.sleep(3)
+    # main_driver = login(main_driver,email,password)
+    time.sleep(5)
     try:
         main_driver.execute_script("window.scrollTo(0,document.body.scrollHeight)")
     except:
@@ -131,16 +156,22 @@ def requestsPost(driver,url,email,password):
         driver.get(url)
     except:
         return False
-    
-    driver = login(driver,email,password)
+    # time.sleep(random.uniform(2,3))
+    time.sleep(1.5)
+    if len(driver.find_elements("name","login")):
+        print("need to login!")    
+        driver = login(driver,email,password, wait_seconds=20)
     
     try:
-        time_range = random.uniform(3,5)
+        time_range = random.uniform(5,10)
         WebDriverWait(driver, time_range).until(
             EC.presence_of_element_located(("id","m_story_permalink_view"))
         )
     
     except:
+        
+        print('requestsPost error')
+        # raise 
         return False
     
     return True
@@ -164,7 +195,8 @@ def getUserName(page_driver,id_):
     
     if user_name != None:
         return user_name
-    return "parse name error"
+    logging.error(f"parse name error:{page_driver.current_url}")
+    return f"parse name error:{page_driver.current_url}"
     
 
 def getText(page_driver,id_):
@@ -209,10 +241,7 @@ def getImg(page_driver,id_):
 def getBlog(page_driver,id_):
     
     try:
-        # tree = etree.HTML(str(soup))
-        # blog_elem = tree.xpath(f'//*[@id="{id_}"]/div/div[2]/a')[0]#.attrib['href']
-        # blog_url = blog_elem.attrib['href']
-        # blog_title = tree.xpath(f'//*[@id="{id_}"]/div/div[2]/a/div/table/tbody/tr/td[2]/h3')[0].text
+        
         blog_title = page_driver.find_element(By.XPATH,f'//*[@id="{id_}"]/div/div/a/div/table/tbody/tr/td[2]/h3').text
         blog_url = page_driver.find_element(By.XPATH,f'//*[@id="{id_}"]/div/div/a').get_attribute('href')
         return blog_url,blog_title
@@ -279,7 +308,8 @@ def getDate(page_driver,id_):
         return date_obj
     except:
         if srt_date == None:
-            return "Timestamp parse error"
+            logging.error(f"Timestamp parse error:{page_driver.current_url}")
+            return f"Timestamp parse error:{page_driver.current_url}"
 
 def getShortUrl(url):
     url = re.sub(r'refid\S+', '', url, flags=re.MULTILINE).replace('/?','')
@@ -291,12 +321,11 @@ def getLikes(page_driver,comment_id):
     sentiment_id = 'sentence_'+comment_id
     # print(sentiment_id)
     try:
-        # //*[@id="sentence_2323278657819723"]/a/div/div
-        # tree = etree.HTML(str(soup))
-        # likes=tree.xpath(f'//*[@id="{sentiment_id}"]/a/div/div')[0].text
+       
         likes = page_driver.find_element(By.XPATH,f'//*[@id="{sentiment_id}"]/a/div/div').text
     except:
-        return "parse likes error"
+        logging.error(f"parse likes error:{page_driver.current_url}")
+        return f"parse likes error:{page_driver.current_url}"
     
     return likes
 def getComment(page_driver,comment_id):
@@ -307,7 +336,8 @@ def getComment(page_driver,comment_id):
         # tree = etree.HTML(str(soup))
         comments = page_driver.find_elements(By.XPATH,f'//*[@id="{uf_id}"]/div/div[4]/div')
     except:
-        return "parse comment error"
+        logging.error(f"parse comment error:{page_driver.current_url}")
+        return f"parse comment error:{page_driver.current_url}"
     
     c_user_list, c_text_list ,c_date_list = [],[],[]
     for c in comments:
@@ -330,23 +360,27 @@ def getComment(page_driver,comment_id):
 def getContent(driver,url,email,password):
     
     url = getShortUrl(url)
+    print(url)
     # driver = requestsPost(driver,url,email,password)
+    time.sleep(2)
     flag = requestsPost(driver,url,email,password)
     if flag == False:
-        return {
-            'user_name':None,
-            'text':None,
-            'imgs':None,
-            'blog_title':None,
-            'blog_url':None,
-            'timestamp':None,
-            'likes':None,
-            'comment':None,
-            'memo':"request error"
-        }
+        logging.error(f"Error request:{url}")
+        raise f"Error request:{url}"
+        # return {
+        #     'user_name':None,
+        #     'text':None,
+        #     'imgs':None,
+        #     'blog_title':None,
+        #     'blog_url':None,
+        #     'timestamp':None,
+        #     'likes':None,
+        #     'comment':None,
+        #     'memo':"request error"
+        # }
     
     # //*[@id="viewport"]/div[3]
-    time.sleep(random.uniform(6,8))
+    
     
     try:
         driver.execute_script("window.scrollTo(0,document.body.scrollHeight)")
